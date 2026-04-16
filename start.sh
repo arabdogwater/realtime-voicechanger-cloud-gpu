@@ -4,13 +4,7 @@ set -e
 apt-get update -qq
 apt-get install -y -q git libsndfile1-dev build-essential python3-dev libportaudio2
 
-REPO_DIR="/workspace/voice-changer"
-
-if [ ! -d "$REPO_DIR" ]; then
-  git clone --depth=1 https://github.com/arabdogwater/realtime-voicechanger-cloud-gpu.git "$REPO_DIR"
-fi
-
-cd "$REPO_DIR/server"
+cd /workspace/voice-changer/server
 
 pip install numpy==1.23.5
 pip install pyworld==0.3.3 --no-build-isolation
