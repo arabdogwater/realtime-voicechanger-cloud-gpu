@@ -35,7 +35,7 @@ class TrustedOriginMiddleware:
         headers = Headers(scope=scope)
         origin = headers.get("origin", "")
         # Origin header is not present for same origin
-        if not origin or origin in self.allowed_origins:
+        if not origin or '*' in self.allowed_origins or origin in self.allowed_origins:
             await self.app(scope, receive, send)
             return
 

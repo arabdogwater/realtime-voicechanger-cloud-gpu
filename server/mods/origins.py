@@ -15,6 +15,9 @@ def compute_local_origins(port: Optional[int] = None) -> list[str]:
 def normalize_origins(origins: Sequence[str]) -> set[str]:
     allowed_origins = set()
     for origin in origins:
+        if origin == '*':
+            allowed_origins.add('*')
+            continue
         url = urlparse(origin)
         assert url.scheme, ENFORCE_URL_ORIGIN_FORMAT
         valid_origin = f'{url.scheme}://{url.hostname}'
