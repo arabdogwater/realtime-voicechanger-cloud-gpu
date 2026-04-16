@@ -122,6 +122,7 @@ export const useServerSetting = (
   const updateServerSettings = useMemo(() => {
     return async (setting: ServerInfo) => {
       if (!props.voiceChangerClient) return;
+      if (!setting || !setting.modelSlots) return;
       for (let i = 0; i < Object.values(ServerSettingKey).length; i++) {
         const k = Object.values(ServerSettingKey)[
           i
@@ -134,7 +135,7 @@ export const useServerSetting = (
             k,
             "" + new_v
           );
-          setServerSetting(res);
+          if (res) setServerSetting(res);
         }
       }
     };
