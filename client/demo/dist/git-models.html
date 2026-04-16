@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en" style="width:100%;height:100%;background:#1a1a2e;color:#e0e0e0;font-family:sans-serif">
+<head>
+  <meta charset="utf-8"/>
+  <title>Git Models — Voice Changer</title>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:32px 16px;background:#1a1a2e}
+    h1{font-size:1.5rem;margin-bottom:24px;color:#7c8cf8}
+    .card{background:#2a2a3e;border-radius:10px;padding:20px;width:100%;max-width:760px;margin-bottom:16px}
+    .model-row{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid #3a3a5e}
+    .model-row:last-child{border-bottom:none}
+    .model-info{flex:1}
+    .model-name{font-weight:600;font-size:1rem}
+    .model-meta{font-size:.8rem;color:#888;margin-top:3px}
+    .badge{display:inline-block;font-size:.7rem;padding:2px 8px;border-radius:20px;margin-left:8px}
+    .badge-installed{background:#1b4332;color:#52b788}
+    .badge-new{background:#1c3a6b;color:#74b3ce}
+    .progress-wrap{margin-top:8px;background:#3a3a5e;border-radius:4px;height:6px;overflow:hidden;display:none}
+    .progress-bar{height:100%;background:#7c8cf8;width:0%;transition:width .3s}
+    .progress-label{font-size:.75rem;color:#aaa;margin-top:4px}
+    button{cursor:pointer;border:none;border-radius:6px;padding:8px 18px;font-size:.9rem;transition:opacity .2s}
+    button:disabled{opacity:.4;cursor:not-allowed}
+    #refreshBtn{background:#3a3a6e;color:#e0e0e0}
+    #refreshBtn:hover:not(:disabled){opacity:.8}
+    #installBtn{background:#7c8cf8;color:#fff;font-weight:600}
+    #installBtn:hover:not(:disabled){opacity:.85}
+    .top-bar{display:flex;gap:12px;align-items:center;margin-bottom:20px;flex-wrap:wrap}
+    #status{font-size:.85rem;color:#888}
+    #backLink{color:#7c8cf8;font-size:.9rem;text-decoration:none;margin-bottom:20px;display:inline-block}
+    #backLink:hover{text-decoration:underline}
+    .empty{color:#666;text-align:center;padding:24px 0}
+  </style>
+</head>
+<body>
+  <div style="width:100%;max-width:760px">
+    <a id="backLink" href="/front">← Back to Voice Changer</a>
+    <h1>Refresh Models from Git</h1>
+    <div class="top-bar">
+      <button id="refreshBtn" onclick="loadModels()">Fetch Catalog</button>
+      <button id="installBtn" onclick="installSelected()" disabled>Install Selected</button>
+      <span id="status">Click "Fetch Catalog" to load available models.</span>
+    </div>
+    <div class="card" id="modelList"><div class="empty">No catalog loaded yet.</div></div>
+  </div>
+
+  <script>
+    let models = [];
+
+    async function loadModels() {
+      const btn = document.getElementById('refreshBtn');
+      const status = document.getElementById('status');
+      btn.disabled = true;
+      status.textContent = 'Fetching catalog…';
+      try {
+        const res = await fetch('/api/git-models/available');
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+        models = data.models || [];
+        renderModels();
+        status.textContent = `${models.length} model(s) in catalog.`;
+      } catch (e) {
+        status.textContent = 'Error: ' + e.message;
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    function renderModels() {
+      const list = document.getElementById('modelList');
+      const installBtn = document.getElementById('installBtn');
+      if (!models.length) {
+        list.innerHTML = '<div class="empty">Catalog is empty.</div>';
+        installBtn.disabled = true;
+        return;
+      }
+      installBtn.disabled = false;
+      list.innerHTML = models.map(m => `
+        <div class="model-row" id="row-${m.id}">
+          <input type="checkbox" id="chk-${m.id}" ${m.installed ? 'disabled' : ''} ${!m.installed ? 'checked' : ''}>
+          <div class="model-info">
+            <div class="model-name">
+              ${esc(m.name)}
+              ${m.installed ? '<span class="badge badge-installed">Installed</span>' : '<span class="badge badge-new">New</span>'}
+            </div>
+            <div class="model-meta">
+              Type: ${esc(m.type)} &nbsp;|&nbsp;
+              Files: ${(m.files || []).map(f => `${esc(f.filename)} (${f.size_mb}MB)`).join(', ')} &nbsp;|&nbsp;
+              ${esc(m.description || '')}
+            </div>
+            <div class="progress-wrap" id="prog-${m.id}"><div class="progress-bar" id="bar-${m.id}"></div></div>
+            <div class="progress-label" id="label-${m.id}"></div>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    async function installSelected() {
+      const ids = models
+        .filter(m => !m.installed && document.getElementById('chk-' + m.id)?.checked)
+        .map(m => m.id);
+      if (!ids.length) { alert('No models selected.'); return; }
+      const status = document.getElementById('status');
+      const installBtn = document.getElementById('installBtn');
+      installBtn.disabled = true;
+      status.textContent = 'Starting install…';
+      try {
+        const res = await fetch('/api/git-models/install', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({model_ids: ids})
+        });
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+        for (const job of data.jobs) {
+          pollJob(job.job_id, job.model_id);
+        }
+        status.textContent = `Downloading ${ids.length} model(s)…`;
+      } catch(e) {
+        status.textContent = 'Error: ' + e.message;
+        installBtn.disabled = false;
+      }
+    }
+
+    function pollJob(jobId, modelId) {
+      const progWrap = document.getElementById('prog-' + modelId);
+      const bar = document.getElementById('bar-' + modelId);
+      const label = document.getElementById('label-' + modelId);
+      if (progWrap) progWrap.style.display = 'block';
+      const interval = setInterval(async () => {
+        try {
+          const res = await fetch('/api/git-models/status/' + jobId);
+          const data = await res.json();
+          if (bar) bar.style.width = Math.round((data.progress || 0) * 100) + '%';
+          if (label) label.textContent = data.current_file ? `Downloading: ${data.current_file}` : '';
+          if (data.status === 'done') {
+            clearInterval(interval);
+            if (label) label.textContent = 'Done!';
+            if (bar) bar.style.background = '#52b788';
+            loadModels();
+          } else if (data.status === 'error') {
+            clearInterval(interval);
+            if (label) label.textContent = 'Error: ' + data.error;
+            if (bar) bar.style.background = '#e63946';
+            document.getElementById('installBtn').disabled = false;
+          }
+        } catch(e) { clearInterval(interval); }
+      }, 800);
+    }
+
+    function esc(s) {
+      return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    }
+  </script>
+</body>
+</html>

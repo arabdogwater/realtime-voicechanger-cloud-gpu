@@ -1,0 +1,17 @@
+[
+  {
+    "id": "example-rvc-model",
+    "name": "Example RVC Model",
+    "type": "RVC",
+    "files": [
+      {
+        "role": "weights",
+        "filename": "example_model.pth",
+        "url": "https://huggingface.co/yourname/models/resolve/main/example_model.pth",
+        "size_mb": 220
+      }
+    ],
+    "description": "Replace this with your actual model entry",
+    "added": "2026-04-16"
+  }
+]
